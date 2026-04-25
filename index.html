@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Weather Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      overflow-y: auto;
+      color: #f8f3f3;
+      transition: background 1s ease-in-out;
+    }
+
+    body.clear {
+      background: url('https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmlhbno2ZXBlcGcybmp0MWgzd3V4Y204bXJseTRjaGxoNmw5dzF2ayZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/0Styincf6K2tvfjb5Q/giphy.gif') no-repeat center center fixed;
+      background-size: cover;
+    }
+
+    body.cloudy {
+      background: url('https://media1.tenor.com/m/f14xUacYc1oAAAAd/storm-world-meteorological-day.gif') no-repeat center center fixed;
+      background-size: cover;
+    }
+
+    body.rainy {
+      background: url('https://media1.tenor.com/m/qwTpwTgNWq4AAAAC/discord-nitro.gif') no-repeat center center fixed;
+      background-size: cover;
+    }
+
+    body.snowy {
+      background: url('https://media1.tenor.com/m/zyBmLONYxKAAAAAd/snow-flakes.gif') no-repeat center center fixed;
+      background-size: cover;
+    }
+
+    body.stormy {
+      background: url('https://media1.tenor.com/m/jjF9xUjx0L8AAAAC/wow-lightning.gif') no-repeat center center fixed;
+      background-size: cover;
+    }
+
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 40px 20px;
+      background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    h1 {
+      margin-bottom: 20px;
+    }
+
+    input, button {
+      padding: 10px;
+      font-size: 16px;
+      margin: 5px;
+      border: none;
+      border-radius: 8px;
+    }
+
+    input {
+      width: 220px;
+    }
+
+    button {
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+
+    #weather-container {
+      margin-top: 20px;
+      background: #ffffff22;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      width: 320px;
+      text-align: center;
+      display: none;
+    }
+
+    #weather-icon {
+      width: 100px;
+      height: 100px;
+      margin-top: 10px;
+    }
+
+    canvas {
+      max-width: 100%;
+      margin-top: 30px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Weather Dashboard</h1>
+  <input type="text" id="city-input" placeholder="Enter city name" />
+  <button onclick="getWeather()">Get Weather</button>
+
+  <div id="weather-container">
+    <h2 id="city-name"></h2>
+    <p id="date-day"></p>
+    <img id="weather-icon" src="" alt="Weather Icon" />
+    <p id="temperature"></p>
+    <p id="description"></p>
+    <p id="humidity"></p>
+    <p id="wind"></p>
+    <p id="precipitation"></p>
+    <p id="sunrise"></p>
+    <p id="sunset"></p>
+  </div>
+
+  <canvas id="tempChart"></canvas>
+</div>
+
+<script>
+  let tempChartInstance = null;
+
+  function getCustomIcon(weatherId) {
+    if (weatherId >= 200 && weatherId < 300) return "storm.png";
+    else if (weatherId >= 300 && weatherId < 600) return "rain.png";
+    else if (weatherId >= 600 && weatherId < 700) return "snow.png";
+    else if (weatherId === 800) return "sun.avif";
+    else if (weatherId > 800) return "cloud.png";
+    else return "sun.avif";
+  }
+
+  function setWeatherBackground(weatherId) {
+    const body = document.body;
+    body.className = "";
+
+    if (weatherId >= 200 && weatherId < 300) {
+      body.classList.add("stormy");
+    } else if (weatherId >= 300 && weatherId < 600) {
+      body.classList.add("rainy");
+    } else if (weatherId >= 600 && weatherId < 700) {
+      body.classList.add("snowy");
+    } else if (weatherId === 800) {
+      body.classList.add("clear");
+    } else if (weatherId > 800) {
+      body.classList.add("cloudy");
+    }
+  }
+
+  function getDayAndDate() {
+    const now = new Date();
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    return now.toLocaleDateString('en-US', options);
+  }
+
+  async function getWeather() {
+    const city = document.getElementById("city-input").value.trim();
+    const weatherContainer = document.getElementById("weather-container");
+
+    if (!city) {
+      alert("Please enter a city name.");
+      return;
+    }
+
+    const apiKey = "1cc3f39691d32cb7b0942d3324697c85";
+    const url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}&units=metric`;
+    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${apiKey}&units=metric`;
+
+    try {
+      const [weatherRes, forecastRes] = await Promise.all([
+        fetch(url),
+        fetch(forecastUrl)
+      ]);
+
+      if (!weatherRes.ok || !forecastRes.ok) throw new Error("City not found");
+
+      const data = await weatherRes.json();
+      const forecastData = await forecastRes.json();
+      const weatherId = data.weather[0].id;
+      const iconFile = getCustomIcon(weatherId);
+
+      const humidity = data.main.humidity;
+      const windSpeed = data.wind.speed;
+      const precipitation = data.rain?.["1h"] || data.snow?.["1h"] || 0;
+
+      const sunrise = new Date(data.sys.sunrise * 1000).toLocaleTimeString();
+      const sunset = new Date(data.sys.sunset * 1000).toLocaleTimeString();
+
+      document.getElementById("city-name").innerText = `Weather in ${data.name}`;
+      document.getElementById("date-day").innerText = getDayAndDate();
+      document.getElementById("temperature").innerText = `🌡 Temperature: ${data.main.temp} °C`;
+      document.getElementById("description").innerText = `☁️ ${data.weather[0].description}`;
+      document.getElementById("humidity").innerText = `💧 Humidity: ${humidity}%`;
+      document.getElementById("wind").innerText = `💨 Wind: ${windSpeed} m/s`;
+      document.getElementById("precipitation").innerText = `🌧 Precipitation: ${precipitation} mm`;
+      document.getElementById("sunrise").innerText = `🌅 Sunrise: ${sunrise}`;
+      document.getElementById("sunset").innerText = `🌇 Sunset: ${sunset}`;
+      document.getElementById("weather-icon").src = `icons/${iconFile}`;
+
+      setWeatherBackground(weatherId);
+      weatherContainer.style.display = "block";
+
+      const labels = forecastData.list.slice(0, 7).map(item => item.dt_txt.split(' ')[0]);
+      const temps = forecastData.list.slice(0, 7).map(item => item.main.temp);
+
+      const ctx = document.getElementById('tempChart').getContext('2d');
+      if (tempChartInstance) {
+        tempChartInstance.destroy();
+      }
+
+      tempChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Next 7 Temps (°C)',
+            data: temps,
+            borderColor: '#00ff99',
+            backgroundColor: 'rgba(0,255,150,0.2)',
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              ticks: {
+                color: '#fff'
+              }
+            },
+            x: {
+              ticks: {
+                color: '#fff'
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              labels: {
+                color: '#fff'
+              }
+            }
+          }
+        }
+      });
+
+    } catch (error) {
+      alert("Error: " + error.message);
+      weatherContainer.style.display = "none";
+    }
+  }
+
+  window.onload = () => {
+    navigator.geolocation?.getCurrentPosition(async pos => {
+      const { latitude, longitude } = pos.coords;
+      const apiKey = "1cc3f39691d32cb7b0942d3324697c85";
+      const revGeoUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${apiKey}`;
+      const res = await fetch(revGeoUrl);
+      const data = await res.json();
+      document.getElementById("city-input").value = data.name;
+      getWeather();
+    });
+  };
+</script>
+
+</body>
+</html>
